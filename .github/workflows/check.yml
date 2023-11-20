@@ -73,6 +73,8 @@ jobs:
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ matrix.msrv }}
+      - name: Install bevy linux deps
+        run: sudo apt-get install g++ pkg-config libx11-dev libasound2-dev libudev-dev
       - name: cargo +${{ matrix.msrv }} check
         run: cd tyche-client && cargo check
 
