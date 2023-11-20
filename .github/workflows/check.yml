@@ -3,7 +3,6 @@
 # - fmt: checks that the code is formatted according to rustfmt
 # - clippy: checks that the code does not contain any clippy warnings
 # - doc: checks that the code can be documented without errors
-# - hack: check combinations of feature flags
 # - msrv: check that the msrv specified in the crate is correct
 permissions:
   contents: read
@@ -33,7 +32,7 @@ jobs:
         with:
           components: rustfmt
       - name: cargo fmt --check
-        run: cargo fmt --check
+        run: cd tyche-client && cargo fmt --check
   clippy:
     runs-on: ubuntu-latest
     name: ${{ matrix.toolchain }} / clippy
@@ -68,10 +67,10 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
-      - name: Install nightly
-        uses: dtolnay/rust-toolchain@nightly
+      - name: Install stable
+        uses: dtolnay/rust-toolchain@stable
       - name: cargo doc
-        run: cargo doc --no-deps --all-features
+        run: cd tyche-client && cargo doc --no-deps --all-features
         env:
           RUSTDOCFLAGS: --cfg docsrs
   msrv:
@@ -92,6 +91,6 @@ jobs:
         with:
           toolchain: ${{ matrix.msrv }}
       - name: cargo +${{ matrix.msrv }} check
-        run: cargo check
+        run: cd tyche-client && cargo check
 
 
