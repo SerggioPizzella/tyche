@@ -61,6 +61,24 @@ jobs:
         uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+  doc:
+    # run docs generation on nightly rather than stable. This enables features like
+    # https://doc.rust-lang.org/beta/unstable-book/language-features/doc-cfg.html which allows an
+    # API be documented as only available in some specific platforms.
+    runs-on: ubuntu-latest
+    name: nightly / doc
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install nightly
+        uses: dtolnay/rust-toolchain@nightly
+      - name: Install bevy linux deps
+        run: sudo apt-get install g++ pkg-config libx11-dev libasound2-dev libudev-dev
+      - name: cargo doc
+        run: cargo doc --no-deps --all-features
+        env:
+          RUSTDOCFLAGS: --cfg docsrs
   msrv:
     runs-on: ubuntu-latest
     # we use a matrix here just because env can't be used in job names
