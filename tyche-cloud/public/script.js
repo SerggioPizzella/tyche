@@ -14,6 +14,7 @@ initializeApp(firebaseConfig);
 
 const auth = getAuth();
 const signInBtn = document.getElementById('quickstart-sign-in');
+const signInMsg = document.getElementById('quickstart-message');
 
 function toggleSignIn() {
     if (!auth.currentUser) {
@@ -48,6 +49,8 @@ function initApp() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ id: session, token: user.accessToken })
             });
+
+            signInMsg.textContent = 'You can safely close this window now, and return to the app';
         } else {
             signInBtn.textContent = 'Sign in with Google';
         }
