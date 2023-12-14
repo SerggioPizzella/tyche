@@ -2,12 +2,14 @@
 name = "tyche-client"
 version = "0.1.0"
 edition = "2021"
-rust_version = "1.74.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 bevy = { version = "0.12.0", features = ["dynamic_linking"] }
+bevy_egui = "0.24.0"
+reqwest = { version = "0.11.22", features = ["blocking", "json"] }
+serde = { version = "1.0.193", features = ["derive"] }
 
 # Enable a small amount of optimization in debug mode
 [profile.dev]
