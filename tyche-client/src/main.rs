@@ -1,10 +1,7 @@
 #![allow(clippy::type_complexity)]
 mod menu;
 
-use bevy::{
-    prelude::*,
-    tasks::Task,
-};
+use bevy::{prelude::*, tasks::Task};
 use bevy_egui::{egui, EguiContexts, EguiPlugin};
 use firebase_auth::FirebaseAuth;
 use futures_lite::future;
@@ -12,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 #[tokio::main]
 async fn main() {
-    let firebase_auth =  FirebaseAuth::new("tyche-cloud").await;
+    let firebase_auth = FirebaseAuth::new("tyche-cloud").await;
 
     App::new()
         .insert_resource(Fire(firebase_auth))
@@ -83,10 +80,7 @@ struct CreateCharacterWindow {
     character_name: String,
 }
 
-fn ui_example_system(
-    mut contexts: EguiContexts,
-    mut ui_state: Local<CreateCharacterWindow>,
-) {
+fn ui_example_system(mut contexts: EguiContexts, mut ui_state: Local<CreateCharacterWindow>) {
     egui::Window::new("Hello").show(contexts.ctx_mut(), |ui| {
         ui.horizontal(|ui| {
             ui.label("Write a name: ");
