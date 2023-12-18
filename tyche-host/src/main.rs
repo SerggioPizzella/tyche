@@ -1,6 +1,6 @@
 #![allow(clippy::type_complexity)]
-use bevy::{prelude::*, log::LogPlugin};
-use bevy_renet::{*, renet::*};
+use bevy::{log::LogPlugin, prelude::*};
+use bevy_renet::{renet::*, *};
 
 fn main() {
     App::new()

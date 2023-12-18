@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
-    sync::{Arc, RwLock}, env,
+    env,
+    sync::{Arc, RwLock},
 };
 
 use axum::{
@@ -36,7 +37,9 @@ async fn main() {
         .with_state(shared_state);
 
     let port = env::var("PORT").unwrap_or("3000".to_string());
-    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port)).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
+        .await
+        .unwrap();
     axum::serve(listener, app).await.unwrap();
 }
 
@@ -67,7 +70,7 @@ async fn get_token(
     let session = &state.read().unwrap().sessions;
 
     if let Some(token) = session.get(&id) {
-        return token.clone().ok_or(StatusCode::FOUND)
+        return token.clone().ok_or(StatusCode::FOUND);
     }
 
     Err(StatusCode::NOT_FOUND)

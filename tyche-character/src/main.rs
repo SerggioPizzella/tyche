@@ -36,5 +36,13 @@ async fn create_character(
 }
 
 async fn get_characters(State(state): State<Arc<RwLock<AppState>>>) -> Json<Vec<String>> {
-    Json(state.read().await.characters.iter().map(|c| c.name.clone()).collect())
+    Json(
+        state
+            .read()
+            .await
+            .characters
+            .iter()
+            .map(|c| c.name.clone())
+            .collect(),
+    )
 }
