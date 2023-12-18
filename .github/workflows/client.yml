@@ -7,6 +7,7 @@
 permissions:
   contents: read
   checks: write
+
 # This configuration allows maintainers of this repo to create a branch and pull request based on
 # the new branch. Restricting the push trigger to the main branch ensures that the PR only gets
 # built once.
@@ -22,6 +23,7 @@ concurrency:
 defaults:
   run:
     working-directory: ./tyche-client
+
 name: check
 jobs:
   fmt:
@@ -40,6 +42,7 @@ jobs:
         run: sudo apt-get install g++ pkg-config libx11-dev libasound2-dev libudev-dev
       - name: cargo fmt --check
         run: cargo fmt --check
+
   clippy:
     runs-on: ubuntu-latest
     name: ${{ matrix.toolchain }} / clippy
@@ -67,6 +70,7 @@ jobs:
         with:
           working-directory: ./tyche-client
           token: ${{ secrets.GITHUB_TOKEN }}
+
   doc:
     # run docs generation on nightly rather than stable. This enables features like
     # https://doc.rust-lang.org/beta/unstable-book/language-features/doc-cfg.html which allows an
@@ -85,6 +89,7 @@ jobs:
         run: cargo doc --no-deps --all-features
         env:
           RUSTDOCFLAGS: --cfg docsrs
+            
   msrv:
     runs-on: ubuntu-latest
     # we use a matrix here just because env can't be used in job names
@@ -105,5 +110,3 @@ jobs:
         run: sudo apt-get install g++ pkg-config libx11-dev libasound2-dev libudev-dev
       - name: cargo +${{ matrix.msrv }} check
         run: cargo check
-
-
