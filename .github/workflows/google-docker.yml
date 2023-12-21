@@ -63,7 +63,7 @@ jobs:
         id: auth
         uses: 'google-github-actions/auth@v2'
         with:
-          project_id: 'tyche-vtt'
+          token_format: access_token
           service_account: github-ci@tyche-vtt.iam.gserviceaccount.com
           workload_identity_provider: projects/137252967327/locations/global/workloadIdentityPools/github/providers/my-repo
 
