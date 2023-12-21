@@ -43,7 +43,7 @@ on:
     branches: [ "main" ]
 
 env:
-  PROJECT_ID: tyche-cloud
+  PROJECT_ID: tyche-vtt
   GAR_LOCATION: europe-west1
   SERVICE: auth
 
@@ -81,6 +81,6 @@ jobs:
       - name: Build and Push Container
         run: |-
           docker build -t "${{ env.SERVICE }}:${{ github.sha }}" ./tyche-${{ env.SERVICE }}
-          docker push "${{ env.SERVICE }}:${{ github.sha }}"
+          docker push "${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE }}/${{ env.SERVICE }}:${{ github.sha }}"
           
       # END - Docker auth and build
