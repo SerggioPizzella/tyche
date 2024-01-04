@@ -44,7 +44,7 @@ on:
 
 env:
   PROJECT_ID: tyche-vtt
-  GAR_LOCATION: europe-west2
+  GAR_LOCATION: europe-west1
   SERVICE: auth
 
 jobs:
