@@ -79,7 +79,7 @@ jobs:
           registry: '${{ env.GAR_LOCATION }}-docker.pkg.dev'
 
       - name: Get Semver
-        run: SEMVER=$(cargo pkgid --package tyche-auth | cut -d# -f2 | cut -d: -f2)
+        run: SEMVER=$(cargo pkgid --package tyche-auth | cut -d# -f2)
 
       - name: Build and push
         uses: docker/build-push-action@v5
