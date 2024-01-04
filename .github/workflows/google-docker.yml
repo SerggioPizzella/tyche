@@ -79,7 +79,7 @@ jobs:
           registry: '${{ env.GAR_LOCATION }}-docker.pkg.dev'
 
       - name: Get Semver
-        run: echo "SEMVER=$(cargo pkgid --package ${{ env.SERVICE }} | cut -d# -f2)" >> $GITHUB_ENV
+        run: echo "SEMVER=$(cargo pkgid --package tyche-${{ env.SERVICE }} | cut -d# -f2)" >> $GITHUB_ENV
 
       - name: Build and push
         uses: docker/build-push-action@v5
