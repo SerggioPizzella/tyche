@@ -11,7 +11,6 @@ use axum::{
     Json, Router,
 };
 use serde::Deserialize;
-use tower_http::services::ServeDir;
 use uuid::Uuid;
 
 #[derive(Debug, Default)]
@@ -30,7 +29,6 @@ async fn main() {
     let shared_state = Arc::new(RwLock::new(AppState::default()));
 
     let app = Router::new()
-        .nest_service("/", ServeDir::new("public"))
         .route("/v1", get(generate_auth_session))
         .route("/v1", post(receive_token))
         .route("/v1/:id", get(get_token))
