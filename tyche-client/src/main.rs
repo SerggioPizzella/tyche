@@ -1,50 +1,26 @@
 #![allow(clippy::type_complexity)]
 mod menu;
+mod firebase;
 
-use bevy::{prelude::*, tasks::Task};
-use bevy_egui::{egui, EguiContexts, EguiPlugin};
-use firebase_auth::FirebaseAuth;
-use futures_lite::future;
+use bevy::{prelude::*, tasks::Task, input::common_conditions::input_toggle_active};
+use bevy_egui::{egui, EguiContexts};
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use menu::MenuPlugin;
 use serde::{Deserialize, Serialize};
 
-#[tokio::main]
-async fn main() {
-    let firebase_auth = FirebaseAuth::new("tyche-cloud").await;
-
+fn main() {
     App::new()
-        .insert_resource(Fire(firebase_auth))
         .add_state::<GameState>()
-        .add_plugins((DefaultPlugins, menu::MenuPlugin))
-        .add_plugins(EguiPlugin)
+        .add_plugins((DefaultPlugins, MenuPlugin))
+        .add_plugins(WorldInspectorPlugin::default().run_if(input_toggle_active(true, KeyCode::Escape)))
         .add_systems(Startup, start_setup)
-        .add_systems(Update, complete_setup.run_if(in_state(GameState::Setup)))
         .add_systems(Update, ui_example_system)
         .run();
 }
 
-#[derive(Component)]
-struct GenericTask<T>(Task<T>);
-
 fn start_setup(mut commands: Commands) {
     commands.spawn(Camera2dBundle::default());
 }
-
-fn complete_setup(
-    mut commands: Commands,
-    mut game_state: ResMut<NextState<GameState>>,
-    mut tasks: Query<(Entity, &mut GenericTask<FirebaseAuth>)>,
-) {
-    for (entity, mut task) in &mut tasks {
-        if let Some(firebase_auth) = future::block_on(future::poll_once(&mut task.0)) {
-            commands.insert_resource(Fire(firebase_auth));
-            commands.entity(entity).despawn();
-            game_state.set(GameState::Menu);
-        }
-    }
-}
-
-#[derive(Resource)]
-struct Fire(FirebaseAuth);
 
 #[derive(Resource)]
 struct User;
@@ -53,12 +29,7 @@ struct User;
 #[derive(Clone, Copy, Default, Eq, PartialEq, Debug, Hash, States)]
 enum GameState {
     #[default]
-    Setup,
     Menu,
-}
-
-mod host {
-    // add code here
 }
 
 #[derive(Debug, Deserialize, Serialize)]

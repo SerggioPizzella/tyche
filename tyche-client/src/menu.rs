@@ -1,55 +1,46 @@
-use std::time::Duration;
-
-use bevy::{app::AppExit, prelude::*, time::common_conditions::on_timer};
+use bevy::{app::AppExit, prelude::*};
 use reqwest::StatusCode;
 
-use crate::Fire;
-
+use crate::{GameState, firebase::{self, FirebaseUser}};
 pub struct MenuPlugin;
 
 const TEXT_COLOR: Color = Color::rgb(0.9, 0.9, 0.9);
 const NORMAL_BUTTON: Color = Color::rgb(0.15, 0.15, 0.15);
 
-// All actions that can be triggered from a button click
-#[derive(Component)]
-enum ButtonAction {
-    Login,
-    Quit,
-}
-
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
         app.add_state::<MenuState>()
             .insert_resource(User::default())
-            .add_systems(Startup, start_menu)
-            .add_systems(Update, menu_action.run_if(in_state(MenuState::Main)))
-            .add_systems(
-                Update,
-                fetch_token.run_if(
-                    in_state(MenuState::LoggingIn).and_then(on_timer(Duration::from_secs(1))),
-                ),
-            )
-            .add_systems(OnEnter(MenuState::Init), spawn_ui)
-            .add_systems(OnEnter(MenuState::LoggedIn), update_ui);
+            .add_systems(OnEnter(GameState::Menu), spawn_ui)
+            .add_systems(OnExit(GameState::Menu), delete_ui)
+            .add_systems(Update, fetch_token.run_if(in_state(MenuState::LoggingIn)))
+            .add_systems(Update, menu_action.run_if(in_state(MenuState::Main)));
     }
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Debug, Hash, States)]
 enum MenuState {
     #[default]
-    Disabled,
-    Init,
     Main,
     LoggingIn,
     LoggedIn,
 }
 
-fn start_menu(mut menu_state: ResMut<NextState<MenuState>>) {
-    menu_state.set(MenuState::Init);
-}
-
 #[derive(Component)]
 struct Title;
+
+#[derive(Component)]
+struct Menu;
+
+#[derive(Component)]
+enum ButtonAction {
+    Login,
+    Quit,
+}
+
+fn delete_ui(mut commands: Commands, menu: Query<Entity, With<Menu>>) {
+    commands.entity(menu.single()).despawn_recursive();
+}
 
 fn spawn_ui(mut menu_state: ResMut<NextState<MenuState>>, mut commands: Commands) {
     commands
@@ -63,6 +54,8 @@ fn spawn_ui(mut menu_state: ResMut<NextState<MenuState>>, mut commands: Commands
             },
             ..default()
         })
+        .insert(Name::new("Main menu"))
+        .insert(Menu)
         .with_children(|parent| {
             parent
                 .spawn(NodeBundle {
@@ -103,7 +96,6 @@ fn spawn_ui(mut menu_state: ResMut<NextState<MenuState>>, mut commands: Commands
 #[derive(Resource, Default)]
 struct User {
     session: String,
-    token: String,
 }
 
 fn spawn_button(parent: &mut ChildBuilder, menu_action: ButtonAction, text: impl Into<String>) {
@@ -137,16 +129,12 @@ fn menu_action(
         match menu_button_action {
             ButtonAction::Quit => app_exit_events.send(AppExit),
             ButtonAction::Login => {
-                let session =
-                    reqwest::blocking::get("https://tyche-cloud-32oauqdpuq-ez.a.run.app/v1")
-                        .unwrap()
-                        .text()
-                        .unwrap();
+                let session = reqwest::blocking::get("http://localhost:3000/v1")
+                    .unwrap()
+                    .text()
+                    .unwrap();
 
-                let _ = open::that(format!(
-                    "https://tyche-cloud-32oauqdpuq-ez.a.run.app/?session={}",
-                    session
-                ));
+                let _ = open::that(format!("https://tyche-vtt.web.app/v1?session={}", session));
                 user.session = session;
                 menu_state.set(MenuState::LoggingIn);
             }
@@ -154,36 +142,18 @@ fn menu_action(
     }
 }
 
-fn fetch_token(mut user: ResMut<User>, mut menu_state: ResMut<NextState<MenuState>>) {
-    let request = reqwest::blocking::get(format!(
-        "https://tyche-cloud-32oauqdpuq-ez.a.run.app/v1/{}",
-        user.session
-    ))
-    .unwrap();
+fn fetch_token(user: ResMut<User>, mut menu_state: ResMut<NextState<MenuState>>) {
+    let request =
+        reqwest::blocking::get(format!("http:/localhost:3000/v1/{}", user.session)).unwrap();
 
+    println!("I made the request: {}", request.status());
     if request.status() == StatusCode::OK {
-        user.token = request.text().unwrap();
+        let content = request.text().unwrap();
+        println!("I made the request, got response: {}", &content);
+        let fire_user: FirebaseUser = firebase::verify_id_token_with_project_id(&content).unwrap();
+        println!("{}", fire_user.name.unwrap());
         menu_state.set(MenuState::LoggedIn);
     }
-}
-
-fn update_ui(
-    user: ResMut<User>,
-    mut query: Query<&mut Text, With<Title>>,
-    mut menu_state: ResMut<NextState<MenuState>>,
-    firebase: Res<Fire>,
-) {
-    let Some(token) = firebase.0.verify(&user.token) else {
-        println!("Why must this happen");
-        return;
-    };
-
-    println!("This guy is logged in {:?}", token.name);
-    for mut text in &mut query {
-        text.sections[0].value = format!("{}", token.name.clone().unwrap());
-    }
-
-    menu_state.set(MenuState::Main);
 }
 
 #[derive(Bundle)]
