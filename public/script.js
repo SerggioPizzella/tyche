@@ -50,13 +50,20 @@ function initApp() {
 
       const params = new URLSearchParams(window.location.search);
       const session = params.get("session");
+      const profile = params.get("mode") ?? "release";
 
-      fetch("http://localhost:3000/v1/" + session, {
+      let api;
+      if (profile === "release") {
+        api = "http://23.251.139.45:3000/v1/";
+      } else if (profile === "local") {
+        api = "http://localhost:3000/v1/";
+      }
+
+      fetch(api + session, {
         method: "POST",
         mode: "no-cors",
         body: user.accessToken,
       });
-
       signInMsg.textContent =
         "You can safely close this window now, and return to the app";
     } else {

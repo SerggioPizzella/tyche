@@ -18,7 +18,7 @@ spec:
     spec:
       containers:
       - name: auth
-        image: europe-west1-docker.pkg.dev/tyche-vtt/tyche/auth:0.1.0
+        image: europe-west1-docker.pkg.dev/tyche-vtt/tyche/auth:0.1.1
         ports:
           - containerPort: 3000
 ---
@@ -28,14 +28,13 @@ kind: Service
 metadata:
   name: auth-service
 spec:
-  type: NodePort
+  type: LoadBalancer
   selector:
     app: auth
   ports:
   - protocol: TCP
     port: 3000
     targetPort: 3000
-    nodePort: 30000
 ---
 
 #apiVersion: autoscaling/v2

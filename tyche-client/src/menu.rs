@@ -1,4 +1,5 @@
 use bevy::{app::AppExit, prelude::*};
+use dotenvy_macro::dotenv;
 use reqwest::StatusCode;
 
 use crate::{GameState, firebase::{self, FirebaseUser}};
@@ -6,6 +7,7 @@ pub struct MenuPlugin;
 
 const TEXT_COLOR: Color = Color::rgb(0.9, 0.9, 0.9);
 const NORMAL_BUTTON: Color = Color::rgb(0.15, 0.15, 0.15);
+const AUTH_SERVICE: &'static str = dotenv!("AUTH_SERVICE");
 
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
@@ -129,12 +131,12 @@ fn menu_action(
         match menu_button_action {
             ButtonAction::Quit => app_exit_events.send(AppExit),
             ButtonAction::Login => {
-                let session = reqwest::blocking::get("http://localhost:3000/v1")
+                let session = reqwest::blocking::get(AUTH_SERVICE)
                     .unwrap()
                     .text()
                     .unwrap();
 
-                let _ = open::that(format!("https://tyche-vtt.web.app/v1?session={}", session));
+                let _ = open::that(format!("https://tyche-vtt.web.app/?session={}&mode=local", session));
                 user.session = session;
                 menu_state.set(MenuState::LoggingIn);
             }
@@ -144,7 +146,7 @@ fn menu_action(
 
 fn fetch_token(user: ResMut<User>, mut menu_state: ResMut<NextState<MenuState>>) {
     let request =
-        reqwest::blocking::get(format!("http:/localhost:3000/v1/{}", user.session)).unwrap();
+        reqwest::blocking::get(format!("{}/{}", AUTH_SERVICE, user.session)).unwrap();
 
     println!("I made the request: {}", request.status());
     if request.status() == StatusCode::OK {
