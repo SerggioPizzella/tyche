@@ -1,5 +1,5 @@
-use jsonwebtoken::{decode_header, decode, Algorithm, DecodingKey, Validation};
-use serde::{Serialize, Deserialize};
+use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::time::Duration;
 
@@ -56,9 +56,7 @@ pub struct FirebaseProvider {
     identities: Map<String, Value>,
 }
 
-pub fn verify_id_token_with_project_id(
-    token: &str,
-) -> Result<FirebaseUser, VerificationError> {
+pub fn verify_id_token_with_project_id(token: &str) -> Result<FirebaseUser, VerificationError> {
     let public_keys = get_public_keys().unwrap();
     let config = get_config();
     let header = decode_header(token).map_err(|_| VerificationError::UnkownKeyAlgorithm)?;
@@ -90,8 +88,8 @@ pub fn verify_id_token_with_project_id(
 }
 
 fn get_public_keys() -> Result<JwkKeys, PublicKeysError> {
-    let response = reqwest::blocking::get(JWK_URL)
-        .map_err(|_| PublicKeysError::NoCacheControlHeader)?;
+    let response =
+        reqwest::blocking::get(JWK_URL).map_err(|_| PublicKeysError::NoCacheControlHeader)?;
 
     let cache_control = match response.headers().get("Cache-Control") {
         Some(header_value) => header_value.to_str(),

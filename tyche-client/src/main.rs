@@ -1,18 +1,23 @@
 #![allow(clippy::type_complexity)]
-mod menu;
 mod firebase;
+mod menu;
 
-use bevy::{prelude::*, tasks::Task, input::common_conditions::input_toggle_active};
+use bevy::{input::common_conditions::input_toggle_active, prelude::*, tasks::Task};
 use bevy_egui::{egui, EguiContexts};
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
+use dotenvy::dotenv;
 use menu::MenuPlugin;
 use serde::{Deserialize, Serialize};
 
 fn main() {
+    let _ = dotenv();
+
     App::new()
         .add_state::<GameState>()
         .add_plugins((DefaultPlugins, MenuPlugin))
-        .add_plugins(WorldInspectorPlugin::default().run_if(input_toggle_active(true, KeyCode::Escape)))
+        .add_plugins(
+            WorldInspectorPlugin::default().run_if(input_toggle_active(true, KeyCode::Escape)),
+        )
         .add_systems(Startup, start_setup)
         .add_systems(Update, ui_example_system)
         .run();

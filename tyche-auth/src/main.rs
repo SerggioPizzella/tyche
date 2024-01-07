@@ -48,11 +48,7 @@ async fn receive_token(
     State(state): State<Arc<RwLock<AppState>>>,
     token: String,
 ) {
-    state
-        .write()
-        .unwrap()
-        .sessions
-        .insert(session, Some(token));
+    state.write().unwrap().sessions.insert(session, Some(token));
 }
 
 async fn get_token(

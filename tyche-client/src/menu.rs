@@ -1,14 +1,22 @@
+use std::env;
+
 use bevy::{app::AppExit, prelude::*};
-use dotenvy_macro::dotenv;
 use reqwest::StatusCode;
 
-use crate::{GameState, firebase::{self, FirebaseUser}};
+use crate::{
+    firebase::{self, FirebaseUser},
+    GameState,
+};
 pub struct MenuPlugin;
 
 const TEXT_COLOR: Color = Color::rgb(0.9, 0.9, 0.9);
 const NORMAL_BUTTON: Color = Color::rgb(0.15, 0.15, 0.15);
-const AUTH_SERVICE: &'static str = dotenv!("AUTH_SERVICE");
 
+macro_rules! auth_service {
+    () => {
+        env::var("AUTH_SERVICE").unwrap()
+    };
+}
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
         app.add_state::<MenuState>()
@@ -131,12 +139,15 @@ fn menu_action(
         match menu_button_action {
             ButtonAction::Quit => app_exit_events.send(AppExit),
             ButtonAction::Login => {
-                let session = reqwest::blocking::get(AUTH_SERVICE)
+                let session = reqwest::blocking::get(auth_service!())
                     .unwrap()
                     .text()
                     .unwrap();
 
-                let _ = open::that(format!("https://tyche-vtt.web.app/?session={}&mode=local", session));
+                let _ = open::that(format!(
+                    "https://tyche-vtt.web.app/?session={}&mode=local",
+                    session
+                ));
                 user.session = session;
                 menu_state.set(MenuState::LoggingIn);
             }
@@ -145,13 +156,10 @@ fn menu_action(
 }
 
 fn fetch_token(user: ResMut<User>, mut menu_state: ResMut<NextState<MenuState>>) {
-    let request =
-        reqwest::blocking::get(format!("{}/{}", AUTH_SERVICE, user.session)).unwrap();
+    let request = reqwest::blocking::get(format!("{}/{}", auth_service!(), user.session)).unwrap();
 
-    println!("I made the request: {}", request.status());
     if request.status() == StatusCode::OK {
         let content = request.text().unwrap();
-        println!("I made the request, got response: {}", &content);
         let fire_user: FirebaseUser = firebase::verify_id_token_with_project_id(&content).unwrap();
         println!("{}", fire_user.name.unwrap());
         menu_state.set(MenuState::LoggedIn);
