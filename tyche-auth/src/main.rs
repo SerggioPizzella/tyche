@@ -8,10 +8,8 @@ use axum::{
     extract::{Path, State},
     http::StatusCode,
     routing::{get, post},
-    Json, Router,
+    Router,
 };
-use serde::Deserialize;
-use tower_http::services::ServeDir;
 use uuid::Uuid;
 
 #[derive(Debug, Default)]
@@ -19,20 +17,13 @@ struct AppState {
     sessions: HashMap<Uuid, Option<String>>,
 }
 
-#[derive(Debug, Deserialize)]
-struct Session {
-    id: Uuid,
-    token: String,
-}
-
 #[tokio::main]
 async fn main() {
     let shared_state = Arc::new(RwLock::new(AppState::default()));
 
     let app = Router::new()
-        .nest_service("/", ServeDir::new("public"))
         .route("/v1", get(generate_auth_session))
-        .route("/v1", post(receive_token))
+        .route("/v1/:id", post(receive_token))
         .route("/v1/:id", get(get_token))
         .with_state(shared_state);
 
@@ -53,14 +44,11 @@ async fn generate_auth_session(State(state): State<Arc<RwLock<AppState>>>) -> St
 }
 
 async fn receive_token(
+    Path(session): Path<Uuid>,
     State(state): State<Arc<RwLock<AppState>>>,
-    Json(access_token): Json<Session>,
+    token: String,
 ) {
-    state
-        .write()
-        .unwrap()
-        .sessions
-        .insert(access_token.id, Some(access_token.token));
+    state.write().unwrap().sessions.insert(session, Some(token));
 }
 
 async fn get_token(
