@@ -3,25 +3,24 @@ use std::env;
 use bevy::{app::AppExit, prelude::*};
 use reqwest::StatusCode;
 
-use crate::{firebase::{self, FirebaseUser}, GameState};
+use crate::{
+    auth_service,
+    firebase::{self, FirebaseUser},
+    user::User,
+    GameState,
+};
 
 use super::Page;
 
 const TEXT_COLOR: Color = Color::rgb(0.9, 0.9, 0.9);
 const NORMAL_BUTTON: Color = Color::rgb(0.15, 0.15, 0.15);
 
-macro_rules! auth_service {
-    () => {
-        env::var("AUTH_SERVICE").unwrap()
-    };
-}
-
 pub struct LoginPage;
 
 impl Plugin for LoginPage {
     fn build(&self, app: &mut App) {
         app.add_state::<LoginState>()
-            .insert_resource(User::default())
+            .insert_resource(Session::default())
             .add_systems(OnEnter(Page::Login), spawn_ui)
             .add_systems(OnExit(GameState::Menu), delete_ui)
             .add_systems(Update, menu_action.run_if(in_state(LoginState::Main)))
@@ -40,7 +39,6 @@ enum LoginState {
 
 #[derive(Component)]
 struct Title;
-
 
 #[derive(Component)]
 enum ButtonAction {
@@ -110,9 +108,7 @@ fn spawn_ui(mut menu_state: ResMut<NextState<LoginState>>, mut commands: Command
 }
 
 #[derive(Resource, Default)]
-struct User {
-    session: String,
-}
+struct Session(String);
 
 fn spawn_button(parent: &mut ChildBuilder, menu_action: ButtonAction, text: impl Into<String>) {
     let button_text_style = TextStyle {
@@ -135,7 +131,7 @@ fn menu_action(
     interaction_query: Query<(&Interaction, &ButtonAction), (Changed<Interaction>, With<Button>)>,
     mut app_exit_events: EventWriter<AppExit>,
     mut menu_state: ResMut<NextState<LoginState>>,
-    mut user: ResMut<User>,
+    mut session: ResMut<Session>,
 ) {
     for (interaction, menu_button_action) in &interaction_query {
         if *interaction != Interaction::Pressed {
@@ -145,30 +141,35 @@ fn menu_action(
         match menu_button_action {
             ButtonAction::Quit => app_exit_events.send(AppExit),
             ButtonAction::Login => {
-                let session = reqwest::blocking::get(auth_service!())
+                let content = reqwest::blocking::get(auth_service!())
                     .unwrap()
                     .text()
                     .unwrap();
 
+                session.0 = content;
                 let _ = open::that(format!(
                     "https://tyche-vtt.web.app/?session={}&mode=local",
-                    session
+                    session.0
                 ));
-                user.session = session;
                 menu_state.set(LoginState::LoggingIn);
             }
         }
     }
 }
 
-fn fetch_token(user: ResMut<User>, mut menu_state: ResMut<NextState<LoginState>>) {
-    let request = reqwest::blocking::get(format!("{}/{}", auth_service!(), user.session)).unwrap();
+fn fetch_token(
+    session: ResMut<Session>,
+    mut user: ResMut<User>,
+    mut menu_state: ResMut<NextState<LoginState>>,
+) {
+    let request = reqwest::blocking::get(format!("{}/{}", auth_service!(), session.0)).unwrap();
 
     if request.status() == StatusCode::OK {
         let content = request.text().unwrap();
-        let fire_user: FirebaseUser = firebase::verify_id_token_with_project_id(&content).unwrap();
-        println!("{}", fire_user.name.unwrap());
+        let fire_user = firebase::verify_id_token_with_project_id(&content).unwrap();
         menu_state.set(LoginState::LoggedIn);
+        user.name = fire_user.name.unwrap();
+        user.token = content;
     }
 }
 
