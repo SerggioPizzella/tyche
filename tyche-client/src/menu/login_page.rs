@@ -1,35 +1,36 @@
-use std::env;
+
 
 use bevy::{app::AppExit, prelude::*};
 use reqwest::StatusCode;
 
 use crate::{
-    firebase::{self, FirebaseUser},
+    auth_service,
+    firebase::{self},
+    user::User,
     GameState,
 };
-pub struct MenuPlugin;
+
+use super::Page;
 
 const TEXT_COLOR: Color = Color::rgb(0.9, 0.9, 0.9);
 const NORMAL_BUTTON: Color = Color::rgb(0.15, 0.15, 0.15);
 
-macro_rules! auth_service {
-    () => {
-        env::var("AUTH_SERVICE").unwrap()
-    };
-}
-impl Plugin for MenuPlugin {
+pub struct LoginPage;
+
+impl Plugin for LoginPage {
     fn build(&self, app: &mut App) {
-        app.add_state::<MenuState>()
-            .insert_resource(User::default())
-            .add_systems(OnEnter(GameState::Menu), spawn_ui)
+        app.add_state::<LoginState>()
+            .insert_resource(Session::default())
+            .add_systems(OnEnter(Page::Login), spawn_ui)
             .add_systems(OnExit(GameState::Menu), delete_ui)
-            .add_systems(Update, fetch_token.run_if(in_state(MenuState::LoggingIn)))
-            .add_systems(Update, menu_action.run_if(in_state(MenuState::Main)));
+            .add_systems(Update, menu_action.run_if(in_state(LoginState::Main)))
+            .add_systems(Update, fetch_token.run_if(in_state(LoginState::LoggingIn)))
+            .add_systems(OnEnter(LoginState::LoggedIn), login_complete);
     }
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Debug, Hash, States)]
-enum MenuState {
+enum LoginState {
     #[default]
     Main,
     LoggingIn,
@@ -40,19 +41,22 @@ enum MenuState {
 struct Title;
 
 #[derive(Component)]
-struct Menu;
-
-#[derive(Component)]
 enum ButtonAction {
     Login,
     Quit,
 }
+#[derive(Component)]
+struct Root;
 
-fn delete_ui(mut commands: Commands, menu: Query<Entity, With<Menu>>) {
+fn delete_ui(mut commands: Commands, menu: Query<Entity, With<Root>>) {
     commands.entity(menu.single()).despawn_recursive();
 }
 
-fn spawn_ui(mut menu_state: ResMut<NextState<MenuState>>, mut commands: Commands) {
+fn login_complete(mut menu_state: ResMut<NextState<GameState>>) {
+    menu_state.set(GameState::Main)
+}
+
+fn spawn_ui(mut menu_state: ResMut<NextState<LoginState>>, mut commands: Commands) {
     commands
         .spawn(NodeBundle {
             style: Style {
@@ -64,8 +68,8 @@ fn spawn_ui(mut menu_state: ResMut<NextState<MenuState>>, mut commands: Commands
             },
             ..default()
         })
-        .insert(Name::new("Main menu"))
-        .insert(Menu)
+        .insert(Root)
+        .insert(Name::new("Login Page"))
         .with_children(|parent| {
             parent
                 .spawn(NodeBundle {
@@ -78,10 +82,9 @@ fn spawn_ui(mut menu_state: ResMut<NextState<MenuState>>, mut commands: Commands
                     ..default()
                 })
                 .with_children(|parent| {
-                    // Display the game name
                     parent.spawn((
                         TextBundle::from_section(
-                            "Bevy Game Menu UI",
+                            "Tyche",
                             TextStyle {
                                 font_size: 80.0,
                                 color: TEXT_COLOR,
@@ -100,13 +103,11 @@ fn spawn_ui(mut menu_state: ResMut<NextState<MenuState>>, mut commands: Commands
                 });
         });
 
-    menu_state.set(MenuState::Main);
+    menu_state.set(LoginState::Main);
 }
 
 #[derive(Resource, Default)]
-struct User {
-    session: String,
-}
+struct Session(String);
 
 fn spawn_button(parent: &mut ChildBuilder, menu_action: ButtonAction, text: impl Into<String>) {
     let button_text_style = TextStyle {
@@ -128,8 +129,8 @@ fn spawn_button(parent: &mut ChildBuilder, menu_action: ButtonAction, text: impl
 fn menu_action(
     interaction_query: Query<(&Interaction, &ButtonAction), (Changed<Interaction>, With<Button>)>,
     mut app_exit_events: EventWriter<AppExit>,
-    mut menu_state: ResMut<NextState<MenuState>>,
-    mut user: ResMut<User>,
+    mut menu_state: ResMut<NextState<LoginState>>,
+    mut session: ResMut<Session>,
 ) {
     for (interaction, menu_button_action) in &interaction_query {
         if *interaction != Interaction::Pressed {
@@ -139,30 +140,36 @@ fn menu_action(
         match menu_button_action {
             ButtonAction::Quit => app_exit_events.send(AppExit),
             ButtonAction::Login => {
-                let session = reqwest::blocking::get(auth_service!())
+                let content = reqwest::blocking::get(auth_service!())
                     .unwrap()
                     .text()
                     .unwrap();
 
+                session.0 = content;
                 let _ = open::that(format!(
                     "https://tyche-vtt.web.app/?session={}&mode=local",
-                    session
+                    session.0
                 ));
-                user.session = session;
-                menu_state.set(MenuState::LoggingIn);
+                menu_state.set(LoginState::LoggingIn);
             }
         }
     }
 }
 
-fn fetch_token(user: ResMut<User>, mut menu_state: ResMut<NextState<MenuState>>) {
-    let request = reqwest::blocking::get(format!("{}/{}", auth_service!(), user.session)).unwrap();
+fn fetch_token(
+    session: ResMut<Session>,
+    mut user: ResMut<User>,
+    mut menu_state: ResMut<NextState<LoginState>>,
+) {
+    let request = reqwest::blocking::get(format!("{}/{}", auth_service!(), session.0)).unwrap();
 
     if request.status() == StatusCode::OK {
         let content = request.text().unwrap();
-        let fire_user: FirebaseUser = firebase::verify_id_token_with_project_id(&content).unwrap();
-        println!("{}", fire_user.name.unwrap());
-        menu_state.set(MenuState::LoggedIn);
+        println!("{}", content);
+        let fire_user = firebase::verify_id_token_with_project_id(&content).unwrap();
+        menu_state.set(LoginState::LoggedIn);
+        user.name = fire_user.name.unwrap();
+        user.token = content;
     }
 }
 

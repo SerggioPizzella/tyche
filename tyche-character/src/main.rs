@@ -10,11 +10,11 @@ async fn main() {
 
     // build our application with a single route
     let app = Router::new()
-        .route("/", get(get_characters).post(create_character))
+        .route("/v1", get(get_characters).post(create_character))
         .with_state(shared_state);
 
     // run our app with hyper, listening globally on port 3000
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3001").await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
 
@@ -23,7 +23,7 @@ struct AppState {
     characters: Vec<Character>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct Character {
     name: String,
 }
@@ -35,14 +35,6 @@ async fn create_character(
     state.write().await.characters.push(character);
 }
 
-async fn get_characters(State(state): State<Arc<RwLock<AppState>>>) -> Json<Vec<String>> {
-    Json(
-        state
-            .read()
-            .await
-            .characters
-            .iter()
-            .map(|c| c.name.clone())
-            .collect(),
-    )
+async fn get_characters(State(state): State<Arc<RwLock<AppState>>>) -> Json<Vec<Character>> {
+    Json(state.read().await.characters.clone())
 }
