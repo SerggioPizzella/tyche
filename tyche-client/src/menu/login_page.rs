@@ -1,11 +1,11 @@
-use std::env;
+
 
 use bevy::{app::AppExit, prelude::*};
 use reqwest::StatusCode;
 
 use crate::{
     auth_service,
-    firebase::{self, FirebaseUser},
+    firebase::{self},
     user::User,
     GameState,
 };
@@ -82,10 +82,9 @@ fn spawn_ui(mut menu_state: ResMut<NextState<LoginState>>, mut commands: Command
                     ..default()
                 })
                 .with_children(|parent| {
-                    // Display the game name
                     parent.spawn((
                         TextBundle::from_section(
-                            "Bevy Game Menu UI",
+                            "Tyche",
                             TextStyle {
                                 font_size: 80.0,
                                 color: TEXT_COLOR,
@@ -166,6 +165,7 @@ fn fetch_token(
 
     if request.status() == StatusCode::OK {
         let content = request.text().unwrap();
+        println!("{}", content);
         let fire_user = firebase::verify_id_token_with_project_id(&content).unwrap();
         menu_state.set(LoginState::LoggedIn);
         user.name = fire_user.name.unwrap();
