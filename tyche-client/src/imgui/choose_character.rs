@@ -1,42 +1,79 @@
 use bevy::{
+    app::{Plugin, Update},
     core::Name,
     ecs::{
         event::EventWriter,
-        schedule::NextState,
+        schedule::{common_conditions::in_state, IntoSystemConfigs, NextState, OnEnter, States, OnExit},
         system::{Res, ResMut},
     },
 };
 use bevy_egui::{egui::Window, EguiContexts};
 use reqwest::StatusCode;
 
-use crate::{character_service, user::User, SpawnToken, Token};
+use crate::{
+    character_service,
+    token::{SpawnToken, Token},
+    user::User,
+};
 
 use super::GameMenus;
 
-#[derive(Default)]
-pub struct ChooseCharacterWindow {}
+pub struct ChooseCharacterUI;
 
-pub fn load_characters(mut user: ResMut<User>, mut menu_state: ResMut<NextState<GameMenus>>) {
+impl Plugin for ChooseCharacterUI {
+    fn build(&self, app: &mut bevy::prelude::App) {
+        app.add_state::<ChooseCharacterState>()
+            .add_systems(OnEnter(GameMenus::ChooseCharacter), setup)
+            .add_systems(OnExit(GameMenus::ChooseCharacter), exit)
+            .add_systems(OnEnter(ChooseCharacterState::Loading), load_characters)
+            .add_systems(
+                Update,
+                choose_character_ui.run_if(in_state(ChooseCharacterState::Loaded)),
+            );
+    }
+}
+
+#[derive(Clone, Copy, Default, Eq, PartialEq, Debug, Hash, States)]
+enum ChooseCharacterState {
+    #[default]
+    Disabled,
+    Loading,
+    Loaded,
+}
+
+fn setup(mut state: ResMut<NextState<ChooseCharacterState>>) {
+    state.set(ChooseCharacterState::Loading);
+}
+
+fn exit(mut state: ResMut<NextState<ChooseCharacterState>>) {
+    state.set(ChooseCharacterState::Disabled);
+}
+
+fn load_characters(
+    mut user: ResMut<User>,
+    mut state: ResMut<NextState<ChooseCharacterState>>,
+    mut menu_state: ResMut<NextState<GameMenus>>,
+) {
     let client = reqwest::blocking::Client::new();
     let response = client
         .get(character_service!())
         .bearer_auth(&user.token)
         .send();
 
-
     match response {
         Ok(response) => {
             if response.status() == StatusCode::OK {
                 user.characters = response.json().unwrap();
-                menu_state.set(GameMenus::ChooseCharacter);
+                state.set(ChooseCharacterState::Loaded);
             }
-        },
-        Err(_) => menu_state.set(GameMenus::Failed),
+        }
+        Err(_) => {
+            menu_state.set(GameMenus::Failed);
+        }
     }
-
 }
 
-pub fn choose_character_ui(
+fn choose_character_ui(
     user: Res<User>,
     mut contexts: EguiContexts,
     mut ev_spawn_token: EventWriter<SpawnToken>,
