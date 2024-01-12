@@ -1,6 +1,5 @@
-
-
 use bevy::{app::AppExit, prelude::*};
+
 use reqwest::StatusCode;
 
 use crate::{
@@ -165,7 +164,6 @@ fn fetch_token(
 
     if request.status() == StatusCode::OK {
         let content = request.text().unwrap();
-        println!("{}", content);
         let fire_user = firebase::verify_id_token_with_project_id(&content).unwrap();
         menu_state.set(LoginState::LoggedIn);
         user.name = fire_user.name.unwrap();
