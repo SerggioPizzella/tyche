@@ -1,0 +1,31 @@
+{
+    "Routes": [
+        {
+            "UpstreamHttpMethod": [ "GET"],
+            "DownstreamPathTemplate": "/v1/",
+            "DownstreamScheme": "http",
+            "DownstreamHostAndPorts": [
+                {
+                    "Host": "auth",
+                    "Port": 8080
+                }
+            ],
+            "UpstreamPathTemplate": "/v1/auth/"
+        },
+        {
+            "UpstreamHttpMethod": ["GET", "POST"],
+            "DownstreamPathTemplate": "/v1/{id}",
+            "DownstreamScheme": "http",
+            "DownstreamHostAndPorts": [
+                {
+                    "Host": "auth",
+                    "Port": 8080
+                }
+            ],
+            "UpstreamPathTemplate": "/v1/auth/{id}"
+        }
+    ],
+    "GlobalConfiguration": {
+        "BaseUrl": "http://localhost:5000"
+    }
+}
