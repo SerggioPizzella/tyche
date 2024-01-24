@@ -7,5 +7,5 @@ edition = "2021"
 
 [dependencies]
 axum = "0.7.2"
-serde = { version = "1.0.193", features = ["derive"] }
-tokio = { version = "1.35.0", features = ["full"] }
+serde.workspace = true
+tokio.workspace = true

@@ -1,17 +1,20 @@
 use crate::{
-    character_service,
+    config,
     user::{Character, User},
 };
 use bevy::prelude::*;
 use bevy_egui::{egui::Window, EguiContexts};
 
 use super::GameMenus;
+use tyche_character::Color;
 
 pub struct CreateCharacterUI;
 
 #[derive(Default, Resource)]
 struct CreateCharacterWindow {
     character_name: String,
+    character_color: [f32; 3],
+    portrait: Option<String>,
 }
 
 impl Plugin for CreateCharacterUI {
@@ -60,15 +63,33 @@ fn create_character_ui(
         });
 
         ui.horizontal(|ui| {
+            ui.label("Choose a color: ");
+            ui.color_edit_button_rgb(&mut ui_state.character_color);
+        });
+
+        ui.horizontal(|ui| {
             if ui.small_button("<").clicked() {
                 menu_state.set(GameMenus::ChooseCharacter);
             }
+
             if ui.button("Create").clicked() {
+                let character = Character {
+                    name: ui_state.character_name.clone(),
+                    color: Color {
+                        red: ui_state.character_color[0],
+                        green: ui_state.character_color[1],
+                        blue: ui_state.character_color[2],
+                        alpha: 1.0,
+                    },
+                    portrait: ui_state.portrait.clone(),
+                };
+
                 let client = reqwest::blocking::Client::new();
+
                 let _reply = client
-                    .post(character_service!())
+                    .post(config::character_service())
                     .header("Content-Type", "application/json")
-                    .json(&Character::new(ui_state.character_name.clone()))
+                    .json(&character)
                     .send();
 
                 menu_state.set(GameMenus::ChooseCharacter);

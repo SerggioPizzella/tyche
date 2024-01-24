@@ -3,10 +3,9 @@ use bevy::{app::AppExit, prelude::*};
 use reqwest::StatusCode;
 
 use crate::{
-    auth_service,
     firebase::{self},
     user::User,
-    GameState,
+    GameState, config::auth_service,
 };
 
 use super::Page;
@@ -139,7 +138,7 @@ fn menu_action(
         match menu_button_action {
             ButtonAction::Quit => app_exit_events.send(AppExit),
             ButtonAction::Login => {
-                let content = reqwest::blocking::get(auth_service!())
+                let content = reqwest::blocking::get(auth_service())
                     .unwrap()
                     .text()
                     .unwrap();
@@ -160,14 +159,14 @@ fn fetch_token(
     mut user: ResMut<User>,
     mut menu_state: ResMut<NextState<LoginState>>,
 ) {
-    let request = reqwest::blocking::get(format!("{}/{}", auth_service!(), session.0)).unwrap();
+    let request = reqwest::blocking::get(format!("{}/{}", auth_service(), session.0)).unwrap();
 
     if request.status() == StatusCode::OK {
         let content = request.text().unwrap();
         let fire_user = firebase::verify_id_token_with_project_id(&content).unwrap();
         menu_state.set(LoginState::LoggedIn);
         user.name = fire_user.name.unwrap();
-        user.token = content;
+        user.fire_token = content;
     }
 }
 

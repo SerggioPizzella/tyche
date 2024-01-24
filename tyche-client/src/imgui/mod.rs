@@ -10,16 +10,24 @@ use bevy_egui::{egui::Window, EguiContexts};
 use choose_character::ChooseCharacterUI;
 use create_character::CreateCharacterUI;
 
-mod create_character;
+use crate::GameState;
+
+use self::choose_server::ChooseServerUI;
+
 mod choose_character;
 mod choose_server;
+mod create_character;
 
 pub struct ImguiPlugin;
 
 impl Plugin for ImguiPlugin {
     fn build(&self, app: &mut App) {
         app.add_state::<GameMenus>()
-            .add_plugins((ChooseCharacterUI, CreateCharacterUI))
+            .add_plugins((
+                ChooseCharacterUI,
+                CreateCharacterUI,
+                ChooseServerUI::new(GameState::Main),
+            ))
             .add_systems(Update, (failed_ui.run_if(in_state(GameMenus::Failed)),));
     }
 }

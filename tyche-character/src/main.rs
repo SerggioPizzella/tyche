@@ -1,19 +1,17 @@
 use std::sync::Arc;
 
 use axum::{extract::State, routing::get, Json, Router};
-use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
+use tyche_character::Character;
 
 #[tokio::main]
 async fn main() {
     let shared_state = Arc::new(RwLock::new(AppState::default()));
 
-    // build our application with a single route
     let app = Router::new()
         .route("/v1", get(get_characters).post(create_character))
         .with_state(shared_state);
 
-    // run our app with hyper, listening globally on port 3000
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3001").await.unwrap();
     axum::serve(listener, app).await.unwrap();
 }
@@ -21,11 +19,6 @@ async fn main() {
 #[derive(Debug, Default)]
 struct AppState {
     characters: Vec<Character>,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-struct Character {
-    name: String,
 }
 
 async fn create_character(

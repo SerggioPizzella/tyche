@@ -1,18 +1,11 @@
-use bevy::{
-    app::{Plugin, Update},
-    core::Name,
-    ecs::{
-        event::EventWriter,
-        schedule::{common_conditions::in_state, IntoSystemConfigs, NextState, OnEnter, States, OnExit},
-        system::{Res, ResMut},
-    },
-};
+use bevy::{prelude::*, utils::Uuid};
 use bevy_egui::{egui::Window, EguiContexts};
+use bevy_renet::renet::RenetClient;
 use reqwest::StatusCode;
 
 use crate::{
-    character_service,
-    token::{SpawnToken, Token},
+    config,
+    token::{SpawnToken, Token, MyToken},
     user::User,
 };
 
@@ -56,8 +49,8 @@ fn load_characters(
 ) {
     let client = reqwest::blocking::Client::new();
     let response = client
-        .get(character_service!())
-        .bearer_auth(&user.token)
+        .get(config::character_service())
+        .bearer_auth(&user.fire_token)
         .send();
 
     match response {
@@ -75,15 +68,34 @@ fn load_characters(
 
 fn choose_character_ui(
     user: Res<User>,
+    mut my_token: ResMut<MyToken>,
     mut contexts: EguiContexts,
-    mut ev_spawn_token: EventWriter<SpawnToken>,
+    mut ew_spawn_token: EventWriter<SpawnToken>,
     mut menu_state: ResMut<NextState<GameMenus>>,
+    client: Option<Res<RenetClient>>,
 ) {
     Window::new("Choose your character").show(contexts.ctx_mut(), |ui| {
         ui.vertical(|ui| {
             for character in &user.characters {
-                if ui.button(&character.name).clicked() {
-                    ev_spawn_token.send(SpawnToken(Token::new(Name::new(character.name.clone()))));
+                if client.is_some() {
+                    if ui.button(&character.name).clicked() {
+                        let uuid = Uuid::new_v4();
+
+                        my_token.0 = Some(uuid);
+                        ew_spawn_token.send(SpawnToken(Token {
+                            id: uuid,
+                            name: character.name.clone(),
+                            portrait: character.portrait.clone(),
+                            color: Color::Rgba {
+                                red: character.color.red,
+                                green: character.color.green,
+                                blue: character.color.blue,
+                                alpha: character.color.alpha,
+                            },
+                        }));
+                    }
+                } else {
+                    ui.label(&character.name);
                 }
             }
 

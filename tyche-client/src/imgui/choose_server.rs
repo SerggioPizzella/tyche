@@ -1,18 +1,36 @@
 use bevy::prelude::*;
 use bevy_egui::{egui::Window, EguiContexts};
+use bevy_renet::renet::RenetClient;
 
-use super::GameMenus;
+use crate::ConnectToServer;
 
-pub struct ChooseServerUI;
+pub struct ChooseServerUI<T>
+where
+    T: States,
+{
+    state: T,
+}
 
-impl Plugin for ChooseServerUI {
+impl<T> ChooseServerUI<T>
+where
+    T: States,
+{
+    pub fn new(state: T) -> Self {
+        Self { state }
+    }
+}
+
+impl<T> Plugin for ChooseServerUI<T>
+where
+    T: States,
+{
     fn build(&self, app: &mut bevy::prelude::App) {
         app.add_state::<ChooseServerState>()
-            .add_systems(OnEnter(GameMenus::ChooseCharacter), setup)
-            .add_systems(OnEnter(ChooseServerState::Loading), load_characters)
+            .add_systems(OnEnter(self.state.clone()), setup)
+            .add_systems(OnExit(self.state.clone()), exit)
             .add_systems(
                 Update,
-                choose_character_ui.run_if(in_state(ChooseServerState::Loaded)),
+                choose_server_ui.run_if(in_state(ChooseServerState::Main)),
             );
     }
 }
@@ -21,27 +39,46 @@ impl Plugin for ChooseServerUI {
 enum ChooseServerState {
     #[default]
     Disabled,
-    Loading,
-    Loaded,
+    Main,
 }
 
 fn setup(mut state: ResMut<NextState<ChooseServerState>>) {
-    state.set(ChooseServerState::Loading);
+    state.set(ChooseServerState::Main);
 }
 
-fn load_characters(
-    _state: ResMut<NextState<ChooseServerState>>,
-    _menu_state: ResMut<NextState<GameMenus>>,
-) {
+fn exit(mut state: ResMut<NextState<ChooseServerState>>) {
+    state.set(ChooseServerState::Disabled);
 }
 
-fn choose_character_ui(
+#[derive(Default)]
+struct ChooseServerUi {
+    server_address: String,
+}
+
+fn choose_server_ui(
     mut contexts: EguiContexts,
-    _state: ResMut<NextState<ChooseServerState>>,
-    _menu_state: ResMut<NextState<GameMenus>>,
+    mut choose_server_ui: Local<ChooseServerUi>,
+    mut ev_connect: EventWriter<ConnectToServer>,
+    mut client: Option<ResMut<RenetClient>>,
 ) {
-    Window::new("Choose your character").show(contexts.ctx_mut(), |ui| {
-        ui.vertical(|_ui| {
+    Window::new("Connect to server").show(contexts.ctx_mut(), |ui| {
+        // button to disconnect from server
+        if let Some(client) = client.as_mut() {
+            if ui.button("Disconnect").clicked() {
+                client.disconnect();
+            }
+            return;
+        }
+
+        // input field for server address and port
+        ui.horizontal(|ui| {
+            ui.label("Server address:");
+            ui.text_edit_singleline(&mut choose_server_ui.server_address);
         });
+
+        // button to connect to server
+        if ui.button("Connect").clicked() {
+            ev_connect.send(ConnectToServer(choose_server_ui.server_address.clone()));
+        }
     });
 }

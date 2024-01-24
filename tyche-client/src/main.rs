@@ -1,13 +1,14 @@
 #![allow(clippy::type_complexity)]
+mod config;
 mod firebase;
 mod imgui;
 mod menu;
-mod user;
 mod token;
+mod user;
 
-use std::{net::UdpSocket, time::SystemTime};
+use std::{collections::HashMap, net::UdpSocket, time::SystemTime};
 
-use bevy::{input::common_conditions::input_toggle_active, prelude::*};
+use bevy::{input::common_conditions::input_toggle_active, prelude::*, utils::Uuid};
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 use bevy_renet::{
     renet::{transport::*, *},
@@ -18,9 +19,8 @@ use dotenvy::dotenv;
 use imgui::{GameMenus, ImguiPlugin};
 
 use menu::MenuPlugin;
-use tyche_host::ServerMessages;
+use token::*;
 use user::User;
-use token::TokenPlugin;
 
 fn main() {
     let _ = dotenv();
@@ -28,22 +28,29 @@ fn main() {
     App::new()
         .add_state::<GameState>()
         .insert_resource(User::default())
+        .insert_resource(PlayerInput::default())
+        .add_event::<ConnectToServer>()
         .add_plugins((DefaultPlugins, MenuPlugin, ImguiPlugin, TokenPlugin))
         .add_plugins(
             WorldInspectorPlugin::default().run_if(input_toggle_active(true, KeyCode::Escape)),
         )
         // Renet
         .add_plugins((RenetClientPlugin, NetcodeClientPlugin))
-        //.insert_resource(client)
         .insert_resource(new_renet_transport())
         .add_systems(
             Update,
-            receive_message_system.run_if(resource_exists::<RenetClient>()),
+            (
+                receive_message_system.run_if(client_connected()),
+                client_send_input.run_if(client_connected()),
+                sync_players.run_if(client_connected()),
+            ),
         )
         .add_systems(Startup, start_setup)
-        .add_systems(OnEnter(GameState::Main), (start_imgui, connect_to_server))
+        .add_systems(Update, (player_input, connect_to_server))
+        .add_systems(OnEnter(GameState::Main), start_imgui)
         .run();
 }
+
 fn new_renet_transport() -> NetcodeClientTransport {
     let server_addr = "127.0.0.1:5000".parse().unwrap();
     let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
@@ -61,39 +68,33 @@ fn new_renet_transport() -> NetcodeClientTransport {
     NetcodeClientTransport::new(current_time, authentication, socket).unwrap()
 }
 
-fn connect_to_server(mut commands: Commands) {
-    commands.insert_resource(RenetClient::new(ConnectionConfig::default()));
+#[derive(Clone, Debug, Event)]
+struct ConnectToServer(pub String);
+
+fn connect_to_server(
+    mut commands: Commands,
+    mut ev_connect: EventReader<ConnectToServer>,
+) {
+    for _ in ev_connect.read() {
+        commands.insert_resource(RenetClient::new(ConnectionConfig::default()));
+    }
 }
 
-fn receive_message_system(mut client: ResMut<RenetClient>) {
-    while let Some(_) = client.receive_message(DefaultChannel::ReliableOrdered) {
-        print!("Got reliable message");
-    }
+fn receive_message_system(mut commands: Commands, mut client: ResMut<RenetClient>) {
     while let Some(message) = client.receive_message(DefaultChannel::ReliableUnordered) {
-        let server_message = bincode::deserialize(&message).unwrap();
-        match server_message {
-            ServerMessages::PlayerConnected { id } => {
-                println!("Player {} connected.", id);
+        if let Ok(server_message) = bincode::deserialize::<ServerMessages>(&message) {
+            match server_message {
+                ServerMessages::PlayerConnected { id } => {
+                    println!("Player {} connected.", id);
+                }
+                ServerMessages::PlayerDisconnected { .. } => {}
             }
-            ServerMessages::PlayerDisconnected { .. } => {}
+        }
+        if let Ok(spawn_player_event) = bincode::deserialize::<SpawnToken>(&message) {
+            print!("Spawn player event");
+            spawn_token(&mut commands, &spawn_player_event.0);
         }
     }
-    while let Some(_) = client.receive_message(DefaultChannel::Unreliable) {
-        print!("got unreliable message");
-    }
-}
-
-#[macro_export]
-macro_rules! auth_service {
-    () => {
-        std::env::var("AUTH_SERVICE").unwrap()
-    };
-}
-#[macro_export]
-macro_rules! character_service {
-    () => {
-        std::env::var("CHARACTER_SERVICE").unwrap()
-    };
 }
 
 fn start_setup(mut commands: Commands) {
@@ -109,4 +110,43 @@ enum GameState {
     #[default]
     Menu,
     Main,
+}
+
+fn player_input(keyboard_input: Res<Input<KeyCode>>, mut player_input: ResMut<PlayerInput>) {
+    player_input.left = keyboard_input.pressed(KeyCode::A) || keyboard_input.pressed(KeyCode::Left);
+    player_input.right =
+        keyboard_input.pressed(KeyCode::D) || keyboard_input.pressed(KeyCode::Right);
+    player_input.up = keyboard_input.pressed(KeyCode::W) || keyboard_input.pressed(KeyCode::Up);
+    player_input.down = keyboard_input.pressed(KeyCode::S) || keyboard_input.pressed(KeyCode::Down);
+}
+
+fn client_send_input(
+    my_token: Res<MyToken>,
+    player_input: Res<PlayerInput>,
+    mut client: ResMut<RenetClient>,
+) {
+    let Some(token_id) = my_token.0 else {
+        return;
+    };
+
+    let movement = TokenMovement(token_id, *player_input);
+    let input_message = bincode::serialize(&movement).unwrap();
+    client.send_message(DefaultChannel::ReliableOrdered, input_message);
+}
+
+fn sync_players(
+    mut client: ResMut<RenetClient>,
+    mut player_tokens: Query<(&Token, &mut Transform)>,
+) {
+    while let Some(message) = client.receive_message(DefaultChannel::Unreliable) {
+        let players: HashMap<Uuid, [f32; 3]> = bincode::deserialize(&message).unwrap();
+
+        for (player_token, mut transform) in player_tokens.iter_mut() {
+            if let Some(player_position) = players.get(&player_token.id) {
+                transform.translation.x = player_position[0];
+                transform.translation.y = player_position[1];
+                transform.translation.z = player_position[2];
+            }
+        }
+    }
 }
