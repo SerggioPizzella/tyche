@@ -1,152 +1,36 @@
 #![allow(clippy::type_complexity)]
-mod config;
-mod firebase;
-mod imgui;
-mod menu;
-mod token;
-mod user;
+use clap::Parser;
+use tyche_client::{bevy_world, config::Config, bevy_async};
 
-use std::{collections::HashMap, net::UdpSocket, time::SystemTime};
+#[tokio::main]
+async fn main() {
+    dotenvy::dotenv().ok();
 
-use bevy::{input::common_conditions::input_toggle_active, prelude::*, utils::Uuid};
-use bevy_inspector_egui::quick::WorldInspectorPlugin;
-use bevy_renet::{
-    renet::{transport::*, *},
-    transport::NetcodeClientPlugin,
-    *,
-};
-use dotenvy::dotenv;
-use imgui::{GameMenus, ImguiPlugin};
+    // Initialize the logger.
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_max_level(tracing::Level::ERROR)
+        .init();
 
-use menu::MenuPlugin;
-use token::*;
-use user::User;
+    // Parse our configuration from the environment.
+    // This will exit with a help message if something is wrong.
+    let config = Config::parse();
 
-fn main() {
-    let _ = dotenv();
+    // Create 2 way channels for communication between bevy and tokio.
+    // This is needed because we want to use the tokio runtime to make
+    // requests to our services, but we also want to use bevy to render
+    // our UI and run the game world.
+    let (tokio_tx, bevy_rx) = tokio::sync::mpsc::channel(100);
+    let (bevy_tx, tokio_rx) = tokio::sync::mpsc::channel(100);
 
-    App::new()
-        .add_state::<GameState>()
-        .insert_resource(User::default())
-        .insert_resource(PlayerInput::default())
-        .add_event::<ConnectToServer>()
-        .add_plugins((DefaultPlugins, MenuPlugin, ImguiPlugin, TokenPlugin))
-        .add_plugins(
-            WorldInspectorPlugin::default().run_if(input_toggle_active(true, KeyCode::Escape)),
-        )
-        // Renet
-        .add_plugins((RenetClientPlugin, NetcodeClientPlugin))
-        .insert_resource(new_renet_transport())
-        .add_systems(
-            Update,
-            (
-                receive_message_system.run_if(client_connected()),
-                client_send_input.run_if(client_connected()),
-                sync_players.run_if(client_connected()),
-            ),
-        )
-        .add_systems(Startup, start_setup)
-        .add_systems(Update, (player_input, connect_to_server))
-        .add_systems(OnEnter(GameState::Main), start_imgui)
-        .run();
-}
-
-fn new_renet_transport() -> NetcodeClientTransport {
-    let server_addr = "127.0.0.1:5000".parse().unwrap();
-    let socket = UdpSocket::bind("127.0.0.1:0").unwrap();
-    let current_time = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap();
-    let client_id = current_time.as_millis() as u64;
-    let authentication = ClientAuthentication::Unsecure {
-        client_id,
-        protocol_id: 0,
-        server_addr,
-        user_data: None,
-    };
-
-    NetcodeClientTransport::new(current_time, authentication, socket).unwrap()
-}
-
-#[derive(Clone, Debug, Event)]
-struct ConnectToServer(pub String);
-
-fn connect_to_server(
-    mut commands: Commands,
-    mut ev_connect: EventReader<ConnectToServer>,
-) {
-    for _ in ev_connect.read() {
-        commands.insert_resource(RenetClient::new(ConnectionConfig::default()));
+    {
+        let config = config.clone();
+        // Run the tokio app in the main thread.
+        // This will block until the app exits.
+        tokio::spawn(async {
+            bevy_async::handle_messages(config, tokio_tx, tokio_rx).await;
+        });
     }
-}
 
-fn receive_message_system(mut commands: Commands, mut client: ResMut<RenetClient>) {
-    while let Some(message) = client.receive_message(DefaultChannel::ReliableUnordered) {
-        if let Ok(server_message) = bincode::deserialize::<ServerMessages>(&message) {
-            match server_message {
-                ServerMessages::PlayerConnected { id } => {
-                    println!("Player {} connected.", id);
-                }
-                ServerMessages::PlayerDisconnected { .. } => {}
-            }
-        }
-        if let Ok(spawn_player_event) = bincode::deserialize::<SpawnToken>(&message) {
-            print!("Spawn player event");
-            spawn_token(&mut commands, &spawn_player_event.0);
-        }
-    }
-}
-
-fn start_setup(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
-}
-
-fn start_imgui(mut menu_state: ResMut<NextState<GameMenus>>) {
-    menu_state.set(GameMenus::ChooseCharacter);
-}
-
-#[derive(Clone, Copy, Default, Eq, PartialEq, Debug, Hash, States)]
-enum GameState {
-    #[default]
-    Menu,
-    Main,
-}
-
-fn player_input(keyboard_input: Res<Input<KeyCode>>, mut player_input: ResMut<PlayerInput>) {
-    player_input.left = keyboard_input.pressed(KeyCode::A) || keyboard_input.pressed(KeyCode::Left);
-    player_input.right =
-        keyboard_input.pressed(KeyCode::D) || keyboard_input.pressed(KeyCode::Right);
-    player_input.up = keyboard_input.pressed(KeyCode::W) || keyboard_input.pressed(KeyCode::Up);
-    player_input.down = keyboard_input.pressed(KeyCode::S) || keyboard_input.pressed(KeyCode::Down);
-}
-
-fn client_send_input(
-    my_token: Res<MyToken>,
-    player_input: Res<PlayerInput>,
-    mut client: ResMut<RenetClient>,
-) {
-    let Some(token_id) = my_token.0 else {
-        return;
-    };
-
-    let movement = TokenMovement(token_id, *player_input);
-    let input_message = bincode::serialize(&movement).unwrap();
-    client.send_message(DefaultChannel::ReliableOrdered, input_message);
-}
-
-fn sync_players(
-    mut client: ResMut<RenetClient>,
-    mut player_tokens: Query<(&Token, &mut Transform)>,
-) {
-    while let Some(message) = client.receive_message(DefaultChannel::Unreliable) {
-        let players: HashMap<Uuid, [f32; 3]> = bincode::deserialize(&message).unwrap();
-
-        for (player_token, mut transform) in player_tokens.iter_mut() {
-            if let Some(player_position) = players.get(&player_token.id) {
-                transform.translation.x = player_position[0];
-                transform.translation.y = player_position[1];
-                transform.translation.z = player_position[2];
-            }
-        }
-    }
+    bevy_world::start(config, bevy_tx, bevy_rx);
 }

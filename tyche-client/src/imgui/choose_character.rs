@@ -1,15 +1,18 @@
 use bevy::{prelude::*, utils::Uuid};
-use bevy_egui::{egui::Window, EguiContexts};
+use bevy_egui::{
+    egui::{Color32, Rgba, Window},
+    EguiContexts,
+};
 use bevy_renet::renet::RenetClient;
 use reqwest::StatusCode;
 
 use crate::{
-    config,
-    token::{SpawnToken, Token, MyToken},
+    config::{self, Config},
+    token::{MyToken, SpawnToken, Token},
     user::User,
 };
 
-use super::GameMenus;
+use super::{CurrentCharacter, GameMenus};
 
 pub struct ChooseCharacterUI;
 
@@ -43,24 +46,30 @@ fn exit(mut state: ResMut<NextState<ChooseCharacterState>>) {
 }
 
 fn load_characters(
+    config: Res<Config>,
     mut user: ResMut<User>,
     mut state: ResMut<NextState<ChooseCharacterState>>,
     mut menu_state: ResMut<NextState<GameMenus>>,
 ) {
     let client = reqwest::blocking::Client::new();
     let response = client
-        .get(config::character_service())
+        .get(&config.character_service)
         .bearer_auth(&user.fire_token)
         .send();
 
     match response {
         Ok(response) => {
-            if response.status() == StatusCode::OK {
-                user.characters = response.json().unwrap();
-                state.set(ChooseCharacterState::Loaded);
+            if response.status() != StatusCode::OK {
+                tracing::error!("Error: {:?}", response);
+                menu_state.set(GameMenus::Failed);
+                return;
             }
+
+            user.characters = response.json().unwrap();
+            state.set(ChooseCharacterState::Loaded);
         }
-        Err(_) => {
+        Err(e) => {
+            println!("Error: {}", e);
             menu_state.set(GameMenus::Failed);
         }
     }
@@ -72,31 +81,48 @@ fn choose_character_ui(
     mut contexts: EguiContexts,
     mut ew_spawn_token: EventWriter<SpawnToken>,
     mut menu_state: ResMut<NextState<GameMenus>>,
+    mut current_character: ResMut<CurrentCharacter>,
     client: Option<Res<RenetClient>>,
 ) {
     Window::new("Choose your character").show(contexts.ctx_mut(), |ui| {
         ui.vertical(|ui| {
             for character in &user.characters {
-                if client.is_some() {
-                    if ui.button(&character.name).clicked() {
-                        let uuid = Uuid::new_v4();
+                let color = &character.color;
+                ui.horizontal(|ui| {
+                    ui.colored_label(
+                        Color32::from_rgba_unmultiplied(
+                            color.red,
+                            color.green,
+                            color.blue,
+                            color.alpha,
+                        ),
+                        &character.name,
+                    );
 
-                        my_token.0 = Some(uuid);
-                        ew_spawn_token.send(SpawnToken(Token {
-                            id: uuid,
-                            name: character.name.clone(),
-                            portrait: character.portrait.clone(),
-                            color: Color::Rgba {
-                                red: character.color.red,
-                                green: character.color.green,
-                                blue: character.color.blue,
-                                alpha: character.color.alpha,
-                            },
-                        }));
+                    if ui.small_button("change color").clicked() {
+                        current_character.0 = Some(character.clone());
+                        menu_state.set(GameMenus::ChangeColor);
                     }
-                } else {
-                    ui.label(&character.name);
-                }
+
+                    if client.is_some() {
+                        if ui.button("spawn").clicked() {
+                            let uuid = Uuid::new_v4();
+
+                            my_token.0 = Some(uuid);
+                            ew_spawn_token.send(SpawnToken(Token {
+                                id: uuid,
+                                name: character.name.clone(),
+                                portrait: character.portrait.clone(),
+                                color: Color::Rgba {
+                                    red: character.color.red as f32,
+                                    green: character.color.green as f32,
+                                    blue: character.color.blue as f32,
+                                    alpha: character.color.alpha as f32,
+                                },
+                            }));
+                        }
+                    }
+                });
             }
 
             if ui.button("Create new character").clicked() {

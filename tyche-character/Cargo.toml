@@ -6,7 +6,24 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-axum = "0.7.2"
+axum = { version = "0.7.2", features = ["tower-log"] }
+axum-macros = "0.4.1"
+
+dotenvy.workspace = true
+dotenvy_macro.workspace = true
+clap.workspace = true
+
 firebase-auth.workspace = true
+anyhow.workspace = true
 serde.workspace = true
+sqlx = { version = "0.7.3", features = ["runtime-tokio-native-tls", "mysql"] }
+
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+# HTTP
+tower = { version = "0.4", features = ["buffer"] }
+tower-http = { version = "0.5", features = ["trace"] }
+
 tokio.workspace = true
+tower_governor = { version = "0.3.1", features = ["axum", "tracing"] }

@@ -1,0 +1,60 @@
+---
+# https://kubernetes.io/docs/concepts/workloads/controllers/deployment/
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: character-deployement
+  labels:
+    app: character
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: character
+  template:
+    metadata:
+      labels:
+        app: character
+    spec:
+      containers:
+      - name: character
+        image: europe-west1-docker.pkg.dev/tyche-vtt/tyche/character:0.1.1
+        ports:
+          - containerPort: 3001
+---
+# https://kubernetes.io/docs/concepts/services-networking/service/
+apiVersion: v1
+kind: Service
+metadata:
+  name: character-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: character
+  ports:
+  - protocol: TCP
+    port: 3001
+    targetPort: 3001
+---
+
+#apiVersion: autoscaling/v2
+#kind: HorizontalPodAutoscaler
+#metadata:
+#  name: character-hpa-5che
+#  namespace: default
+#  labels:
+#    app: character
+#spec:
+#  scaleTargetRef:
+#    kind: Deployment
+#    name: character
+#    apiVersion: apps/v1
+#  minReplicas: 1
+#  maxReplicas: 5
+#  metrics:
+#  - type: Resource
+#    resource:
+#      name: cpu
+#      target:
+#        type: Utilization
+#        averageUtilization: 80

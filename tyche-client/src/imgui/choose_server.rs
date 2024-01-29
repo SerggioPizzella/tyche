@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy_egui::{egui::Window, EguiContexts};
 use bevy_renet::renet::RenetClient;
 
-use crate::ConnectToServer;
+use crate::bevy_world::ConnectToServer;
 
 pub struct ChooseServerUI<T>
 where

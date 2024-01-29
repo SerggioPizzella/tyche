@@ -1,6 +1,7 @@
 use crate::{
-    config,
+    bevy_world::ChannelSender,
     user::{Character, User},
+    BevyMessage,
 };
 use bevy::prelude::*;
 use bevy_egui::{egui::Window, EguiContexts};
@@ -13,7 +14,7 @@ pub struct CreateCharacterUI;
 #[derive(Default, Resource)]
 struct CreateCharacterWindow {
     character_name: String,
-    character_color: [f32; 3],
+    character_color: [u8; 4],
     portrait: Option<String>,
 }
 
@@ -52,6 +53,7 @@ fn exit(mut state: ResMut<NextState<CreateCharacterState>>) {
 
 fn create_character_ui(
     user: Res<User>,
+    sender: Res<ChannelSender>,
     mut contexts: EguiContexts,
     mut ui_state: ResMut<CreateCharacterWindow>,
     mut menu_state: ResMut<NextState<GameMenus>>,
@@ -64,7 +66,7 @@ fn create_character_ui(
 
         ui.horizontal(|ui| {
             ui.label("Choose a color: ");
-            ui.color_edit_button_rgb(&mut ui_state.character_color);
+            ui.color_edit_button_srgba_unmultiplied(&mut ui_state.character_color);
         });
 
         ui.horizontal(|ui| {
@@ -74,24 +76,24 @@ fn create_character_ui(
 
             if ui.button("Create").clicked() {
                 let character = Character {
+                    id: None,
                     name: ui_state.character_name.clone(),
                     color: Color {
                         red: ui_state.character_color[0],
                         green: ui_state.character_color[1],
                         blue: ui_state.character_color[2],
-                        alpha: 1.0,
+                        alpha: 255,
                     },
                     portrait: ui_state.portrait.clone(),
+                    owner: user.sub.clone(),
                 };
 
-                let client = reqwest::blocking::Client::new();
-
-                let _reply = client
-                    .post(config::character_service())
-                    .header("Content-Type", "application/json")
-                    .json(&character)
-                    .send();
-
+                sender
+                    .try_send(BevyMessage::CreateCharacter(
+                        user.fire_token.clone(),
+                        character,
+                    ))
+                    .expect("Failed to send message");
                 menu_state.set(GameMenus::ChooseCharacter);
             }
         })

@@ -1,40 +1,34 @@
-use std::sync::Arc;
+use anyhow::Context;
+use clap::Parser;
 
-use axum::{extract::State, routing::get, Json, Router};
-use firebase_auth::{FirebaseUser, FirebaseAuthState, FirebaseAuth};
-use tokio::sync::RwLock;
-use tyche_character::Character;
+use sqlx::MySqlPool;
+use tyche_character::{config::Config, http};
 
 #[tokio::main]
-async fn main() {
-    let shared_state = Arc::new(RwLock::new(AppState::default()));
-    let firebase_auth = FirebaseAuth::new("my-project-id").await;
+async fn main() -> anyhow::Result<()> {
+    dotenvy::dotenv().ok();
 
-    let app = Router::new()
-        .route("/v1", get(get_characters).post(create_character))
-        .with_state(shared_state)
-        .with_state(FirebaseAuthState { firebase_auth });
+    // Initialize the logger.
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::INFO)
+        .init();
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3001").await.unwrap();
-    axum::serve(listener, app).await.unwrap();
-}
+    // Parse our configuration from the environment.
+    // This will exit with a help message if something is wrong.
+    let config = Config::parse();
 
-#[derive(Debug, Default)]
-struct AppState {
-    characters: Vec<Character>,
-}
+    // We create a single connection pool for SQLx that's shared across the whole application.
+    // This saves us from opening a new connection for every API call, which is wasteful.
+    let db = MySqlPool::connect(&config.database_url)
+        .await
+        .context("could not connect to database_url")?;
 
-async fn test(user: FirebaseUser) -> Json<FirebaseUser> {
-    Json(user)
-}
+    // This embeds database migrations in the application binary so we can ensure the database
+    // is migrated correctly on startup
+    sqlx::migrate!().run(&db).await?;
 
-async fn create_character(
-    State(state): State<Arc<RwLock<AppState>>>,
-    Json(character): Json<Character>,
-) {
-    state.write().await.characters.push(character);
-}
+    // Finally, we spin up our API.
+    http::serve(config, db).await?;
 
-async fn get_characters(State(state): State<Arc<RwLock<AppState>>>) -> Json<Vec<Character>> {
-    Json(state.read().await.characters.clone())
+    Ok(())
 }

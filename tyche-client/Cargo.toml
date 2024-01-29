@@ -11,16 +11,26 @@ bevy_renet.workspace = true
 bevy_egui = "0.24.0"
 bevy-inspector-egui = "0.22.1"
 
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
 serde.workspace = true
 serde_json.workspace = true
 bincode.workspace = true
 
+dotenvy.workspace = true
+dotenvy_macro.workspace = true
+
+firebase-auth.workspace = true
+anyhow.workspace = true
+clap.workspace = true
+
 rand = "0.8.5"
 open = "5.0.1"
-dotenvy = "0.15.7"
-dotenvy_macro = "0.15.7"
 reqwest = { version = "0.11.22", features = ["blocking", "json"] }
 
 tyche-host = { version = "0.1.0", path = "../tyche-host" }
 tyche-character = { version = "0.1.0", path = "../tyche-character" }
 jsonwebtoken = "9.2.0"
+futures-lite = "2.2.0"

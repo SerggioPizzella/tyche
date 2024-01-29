@@ -2,11 +2,7 @@ use bevy::{app::AppExit, prelude::*};
 
 use reqwest::StatusCode;
 
-use crate::{
-    firebase::{self},
-    user::User,
-    GameState, config::auth_service,
-};
+use crate::{bevy_world::GameState, config::auth_service, firebase, user::User};
 
 use super::Page;
 
@@ -163,10 +159,14 @@ fn fetch_token(
 
     if request.status() == StatusCode::OK {
         let content = request.text().unwrap();
+        tracing::error!("User logged in: {}", &content);
+
         let fire_user = firebase::verify_id_token_with_project_id(&content).unwrap();
+
         menu_state.set(LoginState::LoggedIn);
         user.name = fire_user.name.unwrap();
         user.fire_token = content;
+        user.sub = fire_user.sub;
     }
 }
 

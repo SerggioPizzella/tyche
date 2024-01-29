@@ -7,4 +7,5 @@ pub struct User {
     pub name: String,
     pub fire_token: String,
     pub characters: Vec<Character>,
+    pub sub: String,
 }
